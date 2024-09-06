@@ -1,5 +1,7 @@
 # Matrix factorization
 
+## Introduction
+
 This notebook uses the Netflix Prize Dataset to do Matrix Factorization, an extremely basic recommendation algorithm approach for movies 🎬
 
 I wrote this tutorial as I was getting back into PyTorch coding, so it might be helpful if you need a refresher on some PyTorch fundamentals.
