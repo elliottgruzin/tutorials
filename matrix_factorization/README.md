@@ -1,6 +1,6 @@
 # Matrix factorization
 
-## Introduction
+## Introduction
 
 This notebook uses the Netflix Prize Dataset to do Matrix Factorization, an extremely basic recommendation algorithm approach for movies 🎬
 
