@@ -47,7 +47,7 @@ def preprocess(ds):
     images = [image_preprocessor(example.convert('RGB')) for example in ds['image']]
     return {"images": images, 'text': ds['text']}
 
-def conditional_inference(noise, model, scheduler, encoded_text):
+def conditional_inference(noise, model, scheduler, encoded_text, guidance_scale = 5.0):
     model.eval()
 
     current_noise = torch.clone(noise)
@@ -55,6 +55,9 @@ def conditional_inference(noise, model, scheduler, encoded_text):
     with torch.no_grad():
         for step in tqdm(scheduler.timesteps):
             noise_pred = model(current_noise, step, encoded_text).sample
+            if guidance_scale != 0:
+                unconditional_noise_pred = model(current_noise, step, torch.zeros(encoded_text.size()).to(device)).sample
+                noise_pred = torch.lerp(unconditional_noise_pred, noise_pred, guidance_scale)
             current_noise = scheduler.step(noise_pred, step, current_noise).prev_sample
 
     generated_images = current_noise
@@ -141,6 +144,11 @@ def conditional_generation_training_loop(model, optimizer, train_dataloader, sch
             images = batch['images']
             token_ids = batch['text']
             encoded = encoder(token_ids).last_hidden_state
+            
+            # classifier-free guidance needs the model to learn how to predict without token info
+            if np.random.random() < 0.1:
+               encoded = torch.zeros(encoded.size()).to(device)
+
             noise = torch.randn(images.shape, device=device)
             bs = images.shape[0]
 
