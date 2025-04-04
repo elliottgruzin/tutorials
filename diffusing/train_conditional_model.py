@@ -1,4 +1,5 @@
 from PIL import Image
+import re
 
 import torch
 from torch.optim import AdamW
@@ -43,11 +44,16 @@ image_preprocessor = transforms.Compose([
 ]
 )
 
+def text_preprocessor(text):
+    match = re.search('(\w+-colored body on a \w+ background)', text)
+    return match.group()
+
 def preprocess(ds):
     images = [image_preprocessor(example.convert('RGB')) for example in ds['image']]
-    return {"images": images, 'text': ds['text']}
+    text = [text_preprocessor(example) for example in ds['text']]
+    return {"images": images, 'text': text, "original_text": ds["text"]}
 
-def conditional_inference(noise, model, scheduler, encoded_text, guidance_scale = 5.0):
+def conditional_inference(noise, model, scheduler, encoded_text, guidance_scale = 10):
     model.eval()
 
     current_noise = torch.clone(noise)
