@@ -93,12 +93,12 @@ text_to_image_denoiser = UNet2DConditionModel(
     down_block_types=[
         "DownBlock2D",
         "DownBlock2D",
-        "AttnDownBlock2D",
-        "AttnDownBlock2D"
+        "CrossAttnDownBlock2D",
+        "CrossAttnDownBlock2D"
     ],
     up_block_types=[
-        "AttnUpBlock2D",
-        "AttnUpBlock2D",
+        "CrossAttnUpBlock2D",
+        "CrossAttnUpBlock2D",
         "UpBlock2D",
         "UpBlock2D"
     ],
@@ -128,10 +128,10 @@ num_train_timesteps = 1000
 def conditional_generation_training_loop(model, optimizer, train_dataloader, scheduler, num_epochs, encoder):
 
     inference_text = [
-        'a character with round green glasses, a bull-shaped head and a red-colored body on a cool background',
-        'a character with no glasses, a robot-shaped head and a teal-colored body on a warm background',
-        'a character with square pink and red glasses, a head with afro hair and a hotbrown-colored body on a warm background',
-        'a character with round pink sunglasses, a toaster-shaped head and a redpinkish-colored body on a grey background',
+        'red-colored body on a cool background',
+        'teal-colored body on a warm background',
+        'hotbrown-colored body on a warm background',
+        'redpinkish-colored body on a grey background',
     ]
 
     inference_tokenized_text = tokenizer(inference_text, padding='max_length', max_length=tokenizer.model_max_length, return_tensors='pt').to(device)
