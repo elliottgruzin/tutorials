@@ -90,18 +90,18 @@ text_to_image_denoiser = UNet2DConditionModel(
     in_channels=3,
     out_channels=3,
     layers_per_block=2,
-    down_block_types=[
-        "DownBlock2D",
-        "DownBlock2D",
-        "CrossAttnDownBlock2D",
-        "CrossAttnDownBlock2D"
-    ],
-    up_block_types=[
-        "CrossAttnUpBlock2D",
-        "CrossAttnUpBlock2D",
-        "UpBlock2D",
-        "UpBlock2D"
-    ],
+    # down_block_types=[
+    #     "DownBlock2D",
+    #     "DownBlock2D",
+    #     "CrossAttnDownBlock2D",
+    #     "CrossAttnDownBlock2D"
+    # ],
+    # up_block_types=[
+    #     "CrossAttnUpBlock2D",
+    #     "CrossAttnUpBlock2D",
+    #     "UpBlock2D",
+    #     "UpBlock2D"
+    # ],
     block_out_channels=(64, 128, 256, 256),
     cross_attention_dim=768
 )
@@ -173,11 +173,11 @@ def conditional_generation_training_loop(model, optimizer, train_dataloader, sch
         loss = np.mean(losses)
         model.eval()
 
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             generated_images = conditional_inference(eval_set, model, scheduler, inference_encoded_text)
             save_image(generated_images, f'epoch_{epoch}.png')
             save_losses(losses, f'losses_{epoch}.png')
 
         print(f'Epoch {epoch} loss: {loss.item()}')
 
-conditional_generation_training_loop(text_to_image_denoiser, optimizer, train_dataloader, scheduler, 35, encoder)
+conditional_generation_training_loop(text_to_image_denoiser, optimizer, train_dataloader, scheduler, 201, encoder)
