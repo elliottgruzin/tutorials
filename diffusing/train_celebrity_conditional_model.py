@@ -47,7 +47,7 @@ def inference(noise, model, scheduler, encoded_text, guidance_scale = 10):
         for step in tqdm(scheduler.timesteps):
             noise_pred = model(current_noise, step, encoded_text).sample
             if guidance_scale != 0:
-                unconditional_noise_pred = model(current_noise, step, torch.zeros(encoded_text.size())).sample
+                unconditional_noise_pred = model(current_noise, step, torch.zeros(encoded_text.size()).to(accelerator.device)).sample
                 noise_pred = torch.lerp(unconditional_noise_pred, noise_pred, guidance_scale)
             current_noise = scheduler.step(noise_pred, step, current_noise).prev_sample
 
@@ -100,8 +100,8 @@ def main():
     inference_encoded_text = encoder(**inference_tokenized_text).last_hidden_state
 
     for i in tqdm(range(epochs)):
-        epoch_losses = training_loop(model, dataloader, encoder, scheduler, criterion, optim)
-        mean_epoch_loss = np.mean(epoch_losses)
+        # epoch_losses = training_loop(model, dataloader, encoder, scheduler, criterion, optim)
+        # mean_epoch_loss = np.mean(epoch_losses)
         model.eval()
 
         if i % 5 == 0:
