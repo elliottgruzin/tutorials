@@ -22,23 +22,11 @@ def generate_model():
         in_channels=3,
         out_channels=3,
         layers_per_block=2,
-        down_block_types=[
-            "DownBlock2D",
-            "DownBlock2D",
-            "CrossAttnDownBlock2D",
-            "CrossAttnDownBlock2D"
-        ],
-        up_block_types=[
-            "CrossAttnUpBlock2D",
-            "CrossAttnUpBlock2D",
-            "UpBlock2D",
-            "UpBlock2D"
-        ],
-        block_out_channels=(64, 128, 128, 128),
+        block_out_channels=(128, 128, 256, 256),
         cross_attention_dim=768
     )
 
-def inference(noise, model, scheduler, encoded_text, guidance_scale = 10):
+def inference(noise, model, scheduler, encoded_text, guidance_scale = 5):
     model.eval()
 
     current_noise = torch.clone(noise)
@@ -100,13 +88,13 @@ def main():
     inference_encoded_text = encoder(**inference_tokenized_text).last_hidden_state
 
     for i in tqdm(range(epochs)):
-        # epoch_losses = training_loop(model, dataloader, encoder, scheduler, criterion, optim)
-        # mean_epoch_loss = np.mean(epoch_losses)
+        epoch_losses = training_loop(model, dataloader, encoder, scheduler, criterion, optim)
+        mean_epoch_loss = np.mean(epoch_losses)
         model.eval()
 
         if i % 5 == 0:
             generated_images = inference(inference_noise, model, scheduler, inference_encoded_text)
-            save_image(generated_images, f'epoch_{epoch}.png')
+            save_image(generated_images, f'epoch_{i}.png')
             save_losses(mean_epoch_loss, f'losses_{i}.png')
 
         print(f'Epoch {i} loss: {mean_epoch_loss.item()}')
