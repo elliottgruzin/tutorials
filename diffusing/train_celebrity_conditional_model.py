@@ -53,8 +53,18 @@ def training_loop(model, dataloader, encoder, scheduler, criterion, optimizer):
             encoded = encoder(token_ids).last_hidden_state
 
             # Synchronized classifier-free guidance dropout
-            if torch.rand(1).item() < 0.1:
+            if accelerator.is_main_process:
+                do_zero = torch.rand(1).item() < 0.1
+                do_zero_tensor = torch.tensor(do_zero, dtype=torch.bool, device=accelerator.device)
+            else:
+                do_zero_tensor = torch.tensor(False, dtype=torch.bool, device=accelerator.device)
+
+            if torch.distributed.is_initialized():
+                torch.distributed.broadcast(do_zero_tensor, src=0)
+
+            if do_zero_tensor.item():
                 encoded = torch.zeros_like(encoded)
+
 
             noise = torch.randn_like(images)
             bs = images.shape[0]
@@ -110,7 +120,7 @@ def main():
 
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        model.save_pretrained('trained_model')
+        accelerator.unwrap_model(model).save_pretrained('trained_model')
 
 if __name__ == "__main__":
     main()
