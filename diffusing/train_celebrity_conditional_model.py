@@ -26,48 +26,49 @@ def generate_model():
         cross_attention_dim=768
     )
 
-def inference(noise, model, scheduler, encoded_text, guidance_scale = 5):
+def inference(noise, model, scheduler, encoded_text, guidance_scale=5):
     model.eval()
-
     current_noise = torch.clone(noise)
 
     with torch.no_grad():
         for step in tqdm(scheduler.timesteps):
             noise_pred = model(current_noise, step, encoded_text).sample
             if guidance_scale != 0:
-                unconditional_noise_pred = model(current_noise, step, torch.zeros(encoded_text.size()).to(accelerator.device)).sample
+                unconditional_noise_pred = model(
+                    current_noise, step, torch.zeros_like(encoded_text)
+                ).sample
                 noise_pred = torch.lerp(unconditional_noise_pred, noise_pred, guidance_scale)
             current_noise = scheduler.step(noise_pred, step, current_noise).prev_sample
 
-    generated_images = current_noise
-    return generated_images
+    return current_noise
 
 def training_loop(model, dataloader, encoder, scheduler, criterion, optimizer):
     losses = []
     model.train()
+    
     for batch in tqdm(dataloader):
-        images = batch['images']
-        token_ids = batch['text']
-        encoded = encoder(token_ids).last_hidden_state
-        
-        # classifier-free guidance needs the model to learn how to predict without token info
-        if np.random.random() < 0.1:
-            encoded = torch.zeros(encoded.size()).to(accelerator.device)
+        with accelerator.accumulate(model):
+            images = batch['images']
+            token_ids = batch['text']
+            encoded = encoder(token_ids).last_hidden_state
 
-        noise = torch.randn(images.shape).to(accelerator.device)
-        bs = images.shape[0]
+            # Synchronized classifier-free guidance dropout
+            if torch.rand(1).item() < 0.1:
+                encoded = torch.zeros_like(encoded)
 
-        timesteps = torch.randint(0, 1000 - 1, (bs,), dtype=torch.long).to(accelerator.device)
-        noisy_images = scheduler.add_noise(images, noise, timesteps)
+            noise = torch.randn_like(images)
+            bs = images.shape[0]
+            timesteps = torch.randint(0, scheduler.num_train_timesteps - 1, (bs,), dtype=torch.long, device=images.device)
+            noisy_images = scheduler.add_noise(images, noise, timesteps)
 
-        predicted_noise = model(noisy_images, timesteps, encoded).sample
+            predicted_noise = model(noisy_images, timesteps, encoded).sample
 
-        loss = criterion(predicted_noise, noise)
-        accelerator.backward(loss)
-        optimizer.step()
-        optimizer.zero_grad()
+            loss = criterion(predicted_noise, noise)
+            accelerator.backward(loss)
+            optimizer.step()
+            optimizer.zero_grad()
 
-        losses.append(loss.item())
+            losses.append(loss.item())
     return losses
 
 def main():
@@ -76,30 +77,40 @@ def main():
     model = generate_model()
     criterion = torch.nn.MSELoss()
     optim = torch.optim.AdamW(model.parameters(), lr=1e-4)
-    scheduler = DDPMScheduler()
+    scheduler = DDPMScheduler(num_train_timesteps=1000)
 
     dataset = load_and_transform()
     dataloader = get_dataloader(tokenizer, dataset, batch_size=32)
-    
-    model, optim, scheduler, encoder, dataloader = accelerator.prepare(model, optim, scheduler, encoder, dataloader)
+
+    model, optim, scheduler, encoder, dataloader = accelerator.prepare(
+        model, optim, scheduler, encoder, dataloader
+    )
 
     inference_noise = torch.randn(4, 3, 64, 64).to(accelerator.device)
-    inference_tokenized_text = tokenizer(inference_text, padding='max_length', max_length=tokenizer.model_max_length, return_tensors='pt').to(accelerator.device)
+    inference_tokenized_text = tokenizer(
+        inference_text, padding='max_length',
+        max_length=tokenizer.model_max_length,
+        truncation=True,
+        return_tensors='pt'
+    ).to(accelerator.device)
     inference_encoded_text = encoder(**inference_tokenized_text).last_hidden_state
 
     for i in tqdm(range(epochs)):
+        accelerator.print(f"Rank {accelerator.process_index}: Starting epoch {i}")
         epoch_losses = training_loop(model, dataloader, encoder, scheduler, criterion, optim)
         mean_epoch_loss = np.mean(epoch_losses)
-        model.eval()
 
-        if i % 5 == 0:
-            generated_images = inference(inference_noise, model, scheduler, inference_encoded_text)
-            save_image(generated_images, f'epoch_{i}.png')
-            save_losses(mean_epoch_loss, f'losses_{i}.png')
+        accelerator.wait_for_everyone()
+        if accelerator.is_main_process:
+            if i % 5 == 0:
+                generated_images = inference(inference_noise, model, scheduler, inference_encoded_text)
+                save_image(generated_images, f'epoch_{i}.png')
+                save_losses(mean_epoch_loss, f'losses_{i}.png')
+            print(f'Epoch {i} loss: {mean_epoch_loss:.4f}')
 
-        print(f'Epoch {i} loss: {mean_epoch_loss.item()}')
+    accelerator.wait_for_everyone()
+    if accelerator.is_main_process:
+        model.save_pretrained('trained_model')
 
-    model.save_pretrained('trained_model')
-
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
