@@ -1,0 +1,8 @@
+datasets
+diffusers
+torch
+accelerate
+torchvision
+matplotlib
+transformers
+pillow==11.2.1

@@ -15,9 +15,6 @@ def generate_model():
         sample_size=64,
         in_channels=3,
         out_channels=3,
-        layers_per_block=2,
-        block_out_channels=(64, 64, 128, 128),
-        # block_out_channels=(128, 128, 256, 256),
     )
 
 def inference(noise, model, scheduler):
